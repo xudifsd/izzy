@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message Move {
+    int32 row       = 1;
+    int32 col       = 2;
+    string author   = 3;
+    int64 timestamp = 4;
+}
+
+message Session {
+    repeated Move move = 1;
+}

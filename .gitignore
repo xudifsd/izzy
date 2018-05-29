@@ -3,3 +3,4 @@
 *.swo
 *.orig
 *.DS_Store
+py_gen/

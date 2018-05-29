@@ -140,7 +140,4 @@ class TestTable(unittest.TestCase):
         self.assertFalse(table.is_finished())
 
 if __name__ == '__main__':
-    logging.basicConfig(format='%(asctime)s : %(thread)d : %(levelname)s : %(message)s',
-                        level=logging.DEBUG)
-
     unittest.main()
