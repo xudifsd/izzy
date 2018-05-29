@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # Mon May 28 18:55:57 CST 2018
 
+import datetime
+import time
+
 import logging
 
 log = logging.getLogger("chess")
@@ -119,6 +122,23 @@ class Table(object):
 
         return False
 
+    def to_ascii(self):
+        buf = []
+
+        for row in xrange(self.row):
+            row_buf = []
+            for col in xrange(self.col):
+                val = self.get(row, col)
+                if val == Table.EMPTY:
+                    row_buf.append("_")
+                elif val == Table.BLACK:
+                    row_buf.append("*")
+                else:
+                    row_buf.append("#")
+
+            buf.append("|".join(row_buf))
+        return "\n".join(buf)
+
 
 class Move(object):
     """ move made by someone """
@@ -130,5 +150,84 @@ class Move(object):
         self.timestamp = timestamp
 
 
+class Session(object):
+    """ represent a session of a game """
+    TABLE_SIZE = 15
+
+    def __init__(self, player1_name, player2_name):
+        self.players = [player1_name, player2_name]
+        self.types = [Table.BLACK, Table.WHITE]
+        self.current = 0
+        self.table = Table(Session.TABLE_SIZE, Session.TABLE_SIZE)
+        self.history = []
+
+    def get_current_player_name(self):
+        return self.players[self.current]
+
+    def move(self, row, col):
+        """ return True on success """
+
+        current_type = self.types[self.current]
+        player_name = self.players[self.current]
+
+        if self.table.set(row, col, current_type):
+            self.current += 1
+            self.current %= 2
+            timestamp = time.mktime(datetime.datetime.now().timetuple())
+
+            self.history.append(Move(row, col, player_name, timestamp))
+            return True
+
+        return False
+
+    def get_winner(self):
+        """ check if last move win the game """
+        if self.table.is_finished():
+            return self.history[-1].author
+
+        return None
+
+    def get_table_ascii(self):
+        return self.table.to_ascii()
+
+
+def commandline_interface():
+    player1_name = raw_input("please input first player's name: ")
+    player2_name = raw_input("please input second player's name: ")
+
+    session = Session(player1_name, player2_name)
+    has_error = False
+
+    while session.get_winner() is None:
+        if not has_error:
+            print session.get_table_ascii()
+
+        prompt = "%s please make a move 'row, col': " % (session.get_current_player_name())
+        row_col = raw_input(prompt)
+        parts = row_col.split(",")
+
+        if len(parts) != 2:
+            print "move should be seperated by `,`, but get " + row_col
+            has_error = True
+            continue
+
+        try:
+            row = int(parts[0])
+            col = int(parts[1])
+        except ValueError as e:
+            print "row or col is not a number " + row_col
+            has_error = True
+            continue
+
+        if not session.move(row, col):
+            print "invalid move " + row_col
+            has_error = True
+            continue
+
+        has_error = False
+
+    print "%s is winner" % (session.get_winner())
+
+
 if __name__ == '__main__':
-    pass
+    commandline_interface()
