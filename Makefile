@@ -10,3 +10,6 @@ protocol: proto/session.proto
 clean:
 	@rm -rf py_gen
 	@find . -type f -regex ".*pyc" | xargs rm
+
+cli: protocol
+	PYTHONPATH=py_gen ./src/cli.py

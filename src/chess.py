@@ -8,6 +8,9 @@ import logging
 
 log = logging.getLogger("chess")
 
+import struct
+import session_pb2
+
 class Table(object):
     """ table represent a chess table, only 3 value are valid: 0, 1, 2"""
 
@@ -125,16 +128,46 @@ class Table(object):
     def to_ascii(self):
         buf = []
 
+        row_buf = []
+        for col in xrange(-1, self.col):
+            if col < 0:
+                row_buf.append("  ")
+            else:
+                row_buf.append("%2s" % (col))
+        buf.append("|".join(row_buf))
+
+        row_buf = []
+        for _ in xrange(-1, self.col):
+            row_buf.append("__")
+        buf.append("|".join(row_buf))
+
         for row in xrange(self.row):
             row_buf = []
-            for col in xrange(self.col):
-                val = self.get(row, col)
-                if val == Table.EMPTY:
-                    row_buf.append("_")
-                elif val == Table.BLACK:
-                    row_buf.append("*")
+            for col in xrange(-1, self.col):
+                if col < 0:
+                    row_buf.append("  ")
                 else:
-                    row_buf.append("#")
+                    val = self.get(row, col)
+                    if val == Table.EMPTY:
+                        row_buf.append("  ")
+                    elif val == Table.BLACK:
+                        row_buf.append("**")
+                    else:
+                        row_buf.append("##")
+            buf.append("|".join(row_buf))
+
+            row_buf = []
+            for col in xrange(-1, self.col):
+                if col < 0:
+                    row_buf.append("%2s" % (row))
+                else:
+                    val = self.get(row, col)
+                    if val == Table.EMPTY:
+                        row_buf.append("__")
+                    elif val == Table.BLACK:
+                        row_buf.append("**")
+                    else:
+                        row_buf.append("##")
 
             buf.append("|".join(row_buf))
         return "\n".join(buf)
@@ -143,16 +176,18 @@ class Table(object):
 class Move(object):
     """ move made by someone """
 
-    def __init__(self, row, col, author, timestamp):
+    def __init__(self, row, col, author, timestamp, is_ai):
         self.row = row
         self.col = col
         self.author = author
         self.timestamp = timestamp
+        self.is_ai = is_ai
 
 
 class Session(object):
     """ represent a session of a game """
     TABLE_SIZE = 15
+    SAVE_TARGET = "data/sessions.data"
 
     def __init__(self, player1_name, player2_name):
         self.players = [player1_name, player2_name]
@@ -173,9 +208,9 @@ class Session(object):
         if self.table.set(row, col, current_type):
             self.current += 1
             self.current %= 2
-            timestamp = time.mktime(datetime.datetime.now().timetuple())
+            timestamp = int(time.mktime(datetime.datetime.now().timetuple()))
 
-            self.history.append(Move(row, col, player_name, timestamp))
+            self.history.append(Move(row, col, player_name, timestamp, False))
             return True
 
         return False
@@ -190,44 +225,65 @@ class Session(object):
     def get_table_ascii(self):
         return self.table.to_ascii()
 
+    def save(self, target=None):
+        """ return True is succ """
+        if self.get_winner() is None:
+            return False
 
-def commandline_interface():
-    player1_name = raw_input("please input first player's name: ")
-    player2_name = raw_input("please input second player's name: ")
+        if target is None:
+            target = Session.SAVE_TARGET
 
-    session = Session(player1_name, player2_name)
-    has_error = False
+        session = session_pb2.Session()
 
-    while session.get_winner() is None:
-        if not has_error:
-            print session.get_table_ascii()
+        for move in self.history:
+            m = session.moves.add()
+            m.row = move.row
+            m.col = move.col
+            m.author = move.author
+            m.timestamp = move.timestamp
+            m.is_ai = move.is_ai
 
-        prompt = "%s please make a move 'row, col': " % (session.get_current_player_name())
-        row_col = raw_input(prompt)
-        parts = row_col.split(",")
+        data = session.SerializeToString()
 
-        if len(parts) != 2:
-            print "move should be seperated by `,`, but get " + row_col
-            has_error = True
-            continue
+        with open(target, "ab") as f:
+            f.write(struct.pack("i", len(data)))
+            f.write(data)
 
-        try:
-            row = int(parts[0])
-            col = int(parts[1])
-        except ValueError as e:
-            print "row or col is not a number " + row_col
-            has_error = True
-            continue
+    @classmethod
+    def replay(cls, target=None):
+        """ replay """
+        if target is None:
+            target = Session.SAVE_TARGET
 
-        if not session.move(row, col):
-            print "invalid move " + row_col
-            has_error = True
-            continue
+        with open(target, "rb") as f:
+            while True:
+                data = f.read(4)
+                if data == "":
+                    break
 
-        has_error = False
+                length, = struct.unpack("i", data)
+                data = f.read(length)
 
-    print "%s is winner" % (session.get_winner())
+                session = session_pb2.Session()
+                session.ParseFromString(data)
+
+                table = Table(Session.TABLE_SIZE, Session.TABLE_SIZE)
+
+                types = [Table.BLACK, Table.WHITE]
+                i = 0
+                for move in session.moves:
+                    table.set(move.row, move.col, types[i])
+                    i += 1
+                    i %= 2
+
+                    date = datetime.datetime.fromtimestamp(move.timestamp)
+
+                    print "%s(is_ai=%r) make move in %d,%d in %s" % (move.author, move.is_ai, move.row, move.col, date.isoformat())
+                    print table.to_ascii()
+                    time.sleep(1)
+
+                print "-" * 100
 
 
 if __name__ == '__main__':
-    commandline_interface()
+    pass

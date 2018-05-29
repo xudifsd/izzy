@@ -5,8 +5,9 @@ message Move {
     int32 col       = 2;
     string author   = 3;
     int64 timestamp = 4;
+    bool is_ai      = 5;
 }
 
 message Session {
-    repeated Move move = 1;
+    repeated Move moves = 1;
 }
