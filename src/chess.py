@@ -43,5 +43,92 @@ class Table(object):
 
         return (self.data & (3 << bit_pos)) >> bit_pos
 
+    def is_finished(self):
+        """ check if game is finished """
+
+        class Checker(object):
+            """ check if has continual occurance of same type """
+            def __init__(self):
+                self.last_type = 0
+                self.num = 0
+
+            def reset(self):
+                self.last_type = 0
+                self.num = 0
+
+            def is_win(self, type):
+                if type == Table.EMPTY:
+                    self.reset()
+                else:
+                    if self.last_type == type:
+                        self.num += 1
+                        if self.num == 5:
+                            return True
+                    else:
+                        self.last_type = type
+                        self.num = 1
+                return False
+
+        checker = Checker()
+
+        # check row wise
+        for row in xrange(self.row):
+            checker.reset()
+            for col in xrange(self.col):
+                if checker.is_win(self.get(row, col)):
+                    return True
+
+        checker.reset()
+
+        # check column wise
+        for col in xrange(self.col):
+            checker.reset()
+            for row in xrange(self.row):
+                if checker.is_win(self.get(row, col)):
+                    return True
+
+        checker.reset()
+
+        # check upper left to lower right wise
+        for delta in xrange(-self.col + 1, self.row):
+            if delta <= 0:
+                row, col = 0, abs(delta)
+            else:
+                row, col = delta, 0
+
+            checker.reset()
+            while row < self.row and col < self.col and row > -1 and col > -1:
+                if checker.is_win(self.get(row, col)):
+                    return True
+                row += 1
+                col += 1
+
+        # check lower left to upper right wise
+        for delta in xrange(0, self.row + self.col - 2):
+            if delta < self.row:
+                row, col = delta, 0
+            else:
+                row, col = self.row - 1, delta - self.row
+
+            checker.reset()
+            while row < self.row and col < self.col and row > -1 and col > -1:
+                if checker.is_win(self.get(row, col)):
+                    return True
+                row -= 1
+                col += 1
+
+        return False
+
+
+class Move(object):
+    """ move made by someone """
+
+    def __init__(self, row, col, author, timestamp):
+        self.row = row
+        self.col = col
+        self.author = author
+        self.timestamp = timestamp
+
+
 if __name__ == '__main__':
     pass
