@@ -8,7 +8,6 @@ import logging
 
 log = logging.getLogger("chess")
 
-import struct
 import session_pb2
 
 class Table(object):
@@ -187,9 +186,8 @@ class Move(object):
 class Session(object):
     """ represent a session of a game """
     TABLE_SIZE = 15
-    SAVE_TARGET = "data/sessions.data"
 
-    def __init__(self, player1_name, player2_name):
+    def __init__(self, player1_name, player2_name, player1_is_ai, player2_is_ai):
         self.players = [player1_name, player2_name]
         self.types = [Table.BLACK, Table.WHITE]
         self.current = 0
@@ -199,7 +197,7 @@ class Session(object):
     def get_current_player_name(self):
         return self.players[self.current]
 
-    def move(self, row, col):
+    def move(self, row, col, timestamp=None):
         """ return True on success """
 
         current_type = self.types[self.current]
@@ -208,7 +206,8 @@ class Session(object):
         if self.table.set(row, col, current_type):
             self.current += 1
             self.current %= 2
-            timestamp = int(time.mktime(datetime.datetime.now().timetuple()))
+            if timestamp is None:
+                timestamp = int(time.mktime(datetime.datetime.now().timetuple()))
 
             self.history.append(Move(row, col, player_name, timestamp, False))
             return True
@@ -225,64 +224,37 @@ class Session(object):
     def get_table_ascii(self):
         return self.table.to_ascii()
 
-    def save(self, target=None):
-        """ return True is succ """
+    def serialize(self):
+        """ return None on not finished """
         if self.get_winner() is None:
-            return False
-
-        if target is None:
-            target = Session.SAVE_TARGET
+            return None
 
         session = session_pb2.Session()
+        session.player1 = self.players[0]
+        session.player2 = self.players[1]
+        session.player1_is_ai = False
+        session.player2_is_ai = False
 
         for move in self.history:
             m = session.moves.add()
             m.row = move.row
             m.col = move.col
-            m.author = move.author
             m.timestamp = move.timestamp
-            m.is_ai = move.is_ai
 
-        data = session.SerializeToString()
-
-        with open(target, "ab") as f:
-            f.write(struct.pack("i", len(data)))
-            f.write(data)
+        return session.SerializeToString()
 
     @classmethod
-    def replay(cls, target=None):
-        """ replay """
-        if target is None:
-            target = Session.SAVE_TARGET
+    def deserialize(cls, data):
+        """ from binary """
+        session = session_pb2.Session()
+        session.ParseFromString(data)
 
-        with open(target, "rb") as f:
-            while True:
-                data = f.read(4)
-                if data == "":
-                    break
+        result = cls(session.player1, session.player2, session.player1_is_ai, session.player2_is_ai)
 
-                length, = struct.unpack("i", data)
-                data = f.read(length)
+        for move in session.moves:
+            result.move(move.row, move.col, move.timestamp)
 
-                session = session_pb2.Session()
-                session.ParseFromString(data)
-
-                table = Table(Session.TABLE_SIZE, Session.TABLE_SIZE)
-
-                types = [Table.BLACK, Table.WHITE]
-                i = 0
-                for move in session.moves:
-                    table.set(move.row, move.col, types[i])
-                    i += 1
-                    i %= 2
-
-                    date = datetime.datetime.fromtimestamp(move.timestamp)
-
-                    print "%s(is_ai=%r) make move in %d,%d in %s" % (move.author, move.is_ai, move.row, move.col, date.isoformat())
-                    print table.to_ascii()
-                    time.sleep(1)
-
-                print "-" * 100
+        return result
 
 
 if __name__ == '__main__':

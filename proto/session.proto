@@ -3,11 +3,13 @@ syntax = "proto3";
 message Move {
     int32 row       = 1;
     int32 col       = 2;
-    string author   = 3;
     int64 timestamp = 4;
-    bool is_ai      = 5;
 }
 
 message Session {
-    repeated Move moves = 1;
+    string player1     = 1;
+    string player2     = 2;
+    bool player1_is_ai = 3;
+    bool player2_is_ai = 4;
+    repeated Move moves = 5;
 }

@@ -12,4 +12,7 @@ clean:
 	@find . -type f -regex ".*pyc" | xargs rm
 
 cli: protocol
-	PYTHONPATH=py_gen ./src/cli.py
+	PYTHONPATH=py_gen ./src/cli.py --play
+
+replay: protocol
+	PYTHONPATH=py_gen ./src/cli.py --replay
