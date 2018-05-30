@@ -10,7 +10,7 @@ def append_to_store(path, data):
     """ append data to the end of store, return True on success """
     sessions = []
 
-    with open(target, "ab") as f:
+    with open(path, "ab") as f:
         compressed = zlib.compress(data)
 
         f.write(struct.pack("i", len(compressed)))

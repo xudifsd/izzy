@@ -139,5 +139,65 @@ class TestTable(unittest.TestCase):
         self.assertTrue(table.set(5, 5, chess.Table.BLACK))
         self.assertFalse(table.is_finished())
 
+
+class TestSession(unittest.TestCase):
+    """ case for session """
+
+    def _build_unfinished_test_session(self):
+        result = chess.Session("a", "b", True, False)
+        result.move(1, 2)
+        result.move(1, 3)
+        result.move(2, 3)
+        result.move(2, 4)
+        result.move(3, 4)
+        result.move(3, 5)
+        result.move(4, 5)
+        result.move(4, 6)
+        return result
+
+    def _build_finished_test_session(self):
+        result = self._build_unfinished_test_session()
+        result.move(5, 6)
+        return result
+
+    def _assert_session_equals(self, s1, s2):
+        self.assertEquals(s1.players, s2.players)
+        self.assertEquals(s1.current, s2.current)
+
+        self.assertEquals(s1.table.row, s2.table.row)
+        self.assertEquals(s1.table.col, s2.table.col)
+        self.assertEquals(s1.table.data, s2.table.data)
+
+        self.assertEquals(len(s1.history), len(s2.history))
+
+        for i in xrange(len(s1.history)):
+            h1 = s1.history[i]
+            h2 = s2.history[i]
+            self.assertEquals(h1.row, h2.row)
+            self.assertEquals(h1.col, h2.col)
+            self.assertEquals(h1.author, h2.author)
+            self.assertEquals(h1.timestamp, h2.timestamp)
+            self.assertEquals(h1.is_ai, h2.is_ai)
+
+
+    def test_can_not_serialize_unfinished_session(self):
+        self.assertEquals(None, self._build_unfinished_test_session().serialize())
+
+    def test_serialize_and_deserialize(self):
+        finished_session = self._build_finished_test_session()
+        self.assertNotEquals(None, finished_session.serialize())
+
+        returned_session = chess.Session.deserialize(finished_session.serialize())
+
+        self._assert_session_equals(finished_session, returned_session)
+
+    def test_get_winner(self):
+        self.assertEquals(None, self._build_unfinished_test_session().get_winner())
+        self.assertEquals("a", self._build_finished_test_session().get_winner())
+
+    def test_get_curret_player_name(self):
+        self.assertEquals("a", self._build_unfinished_test_session().get_current_player_name())
+        self.assertEquals("b", self._build_finished_test_session().get_current_player_name())
+
 if __name__ == '__main__':
     unittest.main()
