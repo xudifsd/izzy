@@ -15,14 +15,14 @@ def play(store_path):
     player1_name = raw_input("please input first player's name: ")
     player2_name = raw_input("please input second player's name: ")
 
-    session = chess.Session(player1_name, player2_name)
+    session = chess.Session(player1_name, player2_name, False, False)
     has_error = False
 
     while session.get_winner() is None:
         if not has_error:
             print session.get_table_ascii()
 
-        prompt = "%s, please make a move 'row, col': " % (session.get_current_player_name())
+        prompt = "%s, please made a move 'row, col': " % (session.get_current_player_name())
         row_col = raw_input(prompt)
         parts = row_col.split(",")
 
@@ -48,7 +48,7 @@ def play(store_path):
 
     print "%s is winner, saving" % (session.get_winner())
 
-    if append_to_store(store_path, session.serialize()):
+    if persist.append_to_store(store_path, session.serialize()):
         print "saving success"
     else:
         print "saving failed"
