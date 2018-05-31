@@ -8,8 +8,22 @@ import re
 import Cookie
 import BaseHTTPServer
 import urlparse
+import shutil
 
 import chess
+
+STATIC_HOME = os.path.join(os.path.dirname(__file__), "../static")
+
+
+MIME_MAPPING = {
+    "css": "text/css",
+    "js": "application/x-javascript",
+    "html": "text/html",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif"
+}
 
 
 class HTTPRequest(object):
@@ -49,6 +63,21 @@ def handle_404(req):
     return HTTPResponse(404, header, "nothing here, you'r using %d" % (req.method))
 
 
+def handle_static(req):
+    path = os.path.join(STATIC_HOME, req.groups[0])
+    parts = os.path.basename(path).split(".")
+
+    if len(parts) == 1 or not os.path.isfile(path):
+        return handle_404(req)
+
+    if MIME_MAPPING.get(parts[-1]) is None:
+        header = {"Content-Type": "application/octet-stream"}
+    else:
+        header = {"Content-Type": MIME_MAPPING[parts[-1]]}
+
+    return HTTPResponse(200, header, open(path))
+
+
 def is_match_all(pattern, string):
     """ return groups on match all """
     m = pattern.match(string)
@@ -67,7 +96,14 @@ def route(route_info, method, path):
     return None, None
 
 
+
 class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+    def is_file(self, obj):
+        fn_type = type(self.__init__)
+        if hasattr(obj, "read") and hasattr(obj, "close"):
+            return True
+        return False
+
     def _set_return(self, status, headers, body):
         self.send_response(status)
 
@@ -76,9 +112,14 @@ class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         self.end_headers()
 
-        # TODO handle file
         if body is not None:
-            self.wfile.write(body)
+            if isinstance(body, str):
+                self.wfile.write(body)
+            elif self.is_file(body):
+                try:
+                    shutil.copyfileobj(body, self.wfile)
+                finally:
+                    body.close()
 
     def process(self, method):
         context = self.server.context
@@ -153,6 +194,7 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
         route_info = (
                 (HTTPServer.GET, re.compile("/"), handle_home_page),
                 (HTTPServer.GET, re.compile("/room/([0-9]+)"), handle_room),
+                (HTTPServer.GET, re.compile("/static/(.*)"), handle_static),
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
 
@@ -163,7 +205,7 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
 def run(server_class=HTTPServer, handler_class=HTTPHandler, port=8080):
     server_address = ("127.0.0.1", port)
     httpd = server_class(server_address, handler_class)
-    print "Starting httpd..."
+    print "Starting httpd at %d..." % (port)
     httpd.serve_forever()
 
 
