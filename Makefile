@@ -1,7 +1,7 @@
 all: test protocol
 
 test: protocol
-	@./run_test.sh
+	@./bin/with-env.sh ./bin/run-test.sh
 
 protocol: proto/session.proto
 	@mkdir -p py_gen
@@ -12,7 +12,10 @@ clean:
 	@find . -type f -regex ".*pyc" | xargs rm
 
 cli: protocol
-	PYTHONPATH=py_gen ./src/cli.py --play
+	./bin/with-env.sh ./src/cli.py --play
 
 replay: protocol
-	PYTHONPATH=py_gen ./src/cli.py --replay
+	./bin/with-env.sh ./src/cli.py --replay
+
+web: protocol
+	./bin/with-env.sh python2 ./src/web.py 8080

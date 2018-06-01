@@ -199,5 +199,8 @@ class TestSession(unittest.TestCase):
         self.assertEquals("a", self._build_unfinished_test_session().get_current_player_name())
         self.assertEquals("b", self._build_finished_test_session().get_current_player_name())
 
+    def test_session_validate_user_name(self):
+        pass # TODO
+
 if __name__ == '__main__':
     unittest.main()

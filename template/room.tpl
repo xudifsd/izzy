@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Room {{ room_id }}</title>
-    <link rel="stylesheet" href="izzy.css">
+    <link rel="stylesheet" href="/static/izzy.css">
     <script type="text/javascript" src="http://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js">
     </script>
     <script type="text/javascript">

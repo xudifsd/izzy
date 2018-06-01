@@ -11,12 +11,16 @@ import urlparse
 import shutil
 import threading
 import logging
+import json
 
 log = logging.getLogger("web")
+
+import jinja2
 
 import chess
 
 STATIC_HOME = os.path.join(os.path.dirname(__file__), "../static")
+TEMPLATE_HOME = os.path.join(os.path.dirname(__file__), "../template")
 
 
 MIME_MAPPING = {
@@ -56,17 +60,38 @@ def redirect(url, cookie=None, status=307):
     return HTTPResponse(status, headers, None, cookie)
 
 
+def render_template(template_file_name, *args, **kwargs):
+    tpl_path = os.path.join(TEMPLATE_HOME, template_file_name)
+    with open(tpl_path, "r") as f:
+        content = f.read()
+
+    return jinja2.Environment().from_string(content).render(*args, **kwargs)
+
+
 def handle_home_page(req):
-    return redirect("/static/home.html")
+    user_name = req.context.uid_handler.get_user_name(req.cookie)
+    if user_name is None:
+        log.debug("user is not logged in")
+        return redirect("/static/login.html")
+
+    headers = {"Content-Type": "text/html; charset=utf-8"}
+
+    rooms = req.context.room_manager.list_waiting_room()
+    body = render_template("home.tpl", rooms=rooms)
+    log.debug("user %s logged in, get rooms %s", user_name, rooms)
+
+    return HTTPResponse(200, headers, body, req.cookie)
 
 
 def handle_login(req):
-    if req.args.get("name") is None:
-        return redirect("/static/home.html")
+    user_name = req.args.get("name")
+    if user_name is None:
+        return redirect("/static/login.html", status=303)
 
-    new_id = req.context.uid_handler.gen_new_id(req.args.get("name"))
+    new_id = req.context.uid_handler.gen_new_id(user_name)
     req.cookie["uid"] = str(new_id)
-    return redirect("/room/123", cookie=req.cookie, status=303)
+    room_id = req.context.room_manager.new_room(user_name)
+    return redirect("/room/%d" % (room_id), cookie=req.cookie, status=303)
 
 
 def handle_room(req):
@@ -74,12 +99,26 @@ def handle_room(req):
     if user_name is None:
         return redirect("/")
 
-    room_number = int(req.groups[0])
     headers = {"Content-Type": "text/html; charset=utf-8"}
 
-    return HTTPResponse(200, headers,
-            "<html><body>%s, welcom to room %d</body></html>" % \
-                    (user_name, room_number), req.cookie)
+    room_id = int(req.groups[0])
+
+    room = req.context.room_manager.get_room(room_id)
+
+    if room is None:
+        return redirect("/")
+
+    add_rtn = room.add_player(user_name)
+
+    if add_rtn == Room.ADD_OK or add_rtn == Room.ADD_ALREADY_IN:
+        return HTTPResponse(200, headers,
+                "<html><body>%s, welcom to room %d, room status %s</body></html>" % \
+                        (user_name, room_id, json.dumps(room.status())), req.cookie)
+    else:
+        # add_rtn is ADD_FULL
+        return HTTPResponse(200, headers,
+                "<html><body>%s, room is full, room status %s</body></html>" % \
+                        (user_name, json.dumps(room.status())), req.cookie)
 
 
 def handle_404(req):
@@ -120,7 +159,6 @@ def route(route_info, method, path):
     return None, None
 
 
-
 class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def _is_file(self, obj):
         fn_type = type(self.__init__)
@@ -143,13 +181,15 @@ class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.end_headers()
 
         if body is not None:
-            if isinstance(body, str):
+            if isinstance(body, str) or isinstance(body, unicode):
                 self.wfile.write(body)
             elif self._is_file(body):
                 try:
                     shutil.copyfileobj(body, self.wfile)
                 finally:
                     body.close()
+            else:
+                log.warn("unknown body %r", body)
 
     def process(self, method):
         context = self.server.context
@@ -231,12 +271,74 @@ class UidHandler(object):
             return len(self.array) - 1
 
 
+class Room(object):
+    ADD_OK, ADD_ALREADY_IN, ADD_FULL = range(3)
+
+    def __init__(self, id):
+        self.id = id
+        self.lock = threading.RLock()
+        self.player_names = []
+        self.session = None
+
+    def add_player(self, name):
+        with self.lock:
+            if name in self.player_names:
+                return Room.ADD_ALREADY_IN
+            elif len(self.player_names) >= 2:
+                return Room.ADD_FULL
+
+            self.player_names.append(name)
+            if len(self.player_names) == 2:
+                self.session = chess.Session(self.player_names[0], self.player_names[1], False, False)
+            return Room.ADD_OK
+
+    def status(self):
+        with self.lock:
+            result = {"id": self.id, "players": self.player_names[:]}
+            if self.session is None:
+                result["status"] = "waiting"
+            else:
+                if self.session.get_winner() is not None:
+                    result["status"] = "finished"
+                else:
+                    result["status"] = "playing"
+                    result["current"] = self.session.get_current_player_name()
+
+            return result
+
+
+
+class RoomManager(object):
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.rooms = []
+
+    def new_room(self, user_name):
+        with self.lock:
+            id = len(self.rooms)
+            room = Room(id)
+            self.rooms.append(room)
+            room.add_player(user_name)
+            return id
+
+    def get_room(self, room_id):
+        with self.lock:
+            if room_id < 0 or room_id >= len(self.rooms):
+                return None
+            return self.rooms[room_id]
+
+    def list_waiting_room(self):
+        with self.lock:
+            result = []
+            return filter(lambda s: s["status"] == "waiting",
+                    map(lambda x: x.status(), self.rooms))
+
+
 class HTTPContext(object):
     """ member of this instance should be thread safe """
-    def __init__(self, route_info, chess_session_class, rooms_info, uid_handler):
+    def __init__(self, route_info, room_manager, uid_handler):
         self.route_info = route_info
-        self.chess_session_class = chess_session_class
-        self.rooms_info = rooms_info
+        self.room_manager = room_manager
         self.uid_handler = uid_handler
 
 
@@ -253,8 +355,7 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
 
-        # TODO implement cookie and session handler
-        self.context = HTTPContext(route_info, chess.Session, None, UidHandler())
+        self.context = HTTPContext(route_info, RoomManager(), UidHandler())
 
 
 def run(server_class=HTTPServer, handler_class=HTTPHandler, port=8080):
@@ -266,7 +367,7 @@ def run(server_class=HTTPServer, handler_class=HTTPHandler, port=8080):
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
-            level=logging.INFO)
+            level=logging.DEBUG)
     if len(sys.argv) == 2:
         run(port=int(sys.argv[1]))
     else:

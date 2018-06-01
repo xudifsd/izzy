@@ -1,8 +1,7 @@
 #!/bin/bash
 
-PYTHONPATH="$PYTHONPATH:src:py_gen"
-
-export PYTHONPATH
+cd `dirname $0`/..
+HOME=`pwd`
 
 has_error=0
 

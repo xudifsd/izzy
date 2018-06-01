@@ -187,6 +187,8 @@ class Session(object):
     """ represent a session of a game """
     TABLE_SIZE = 15
 
+    MOVE_OK, MOVE_INVALID, MOVE_NOT_PLAYER, MOVE_NOT_YOUR_TURN = range(4)
+
     def __init__(self, player1_name, player2_name, player1_is_ai, player2_is_ai):
         self.players = [player1_name, player2_name]
         self.types = [Table.BLACK, Table.WHITE]
@@ -197,11 +199,19 @@ class Session(object):
     def get_current_player_name(self):
         return self.players[self.current]
 
-    def move(self, row, col, timestamp=None):
-        """ return True on success """
+    def move(self, row, col, player=None, timestamp=None):
+        """ return move status """
 
         current_type = self.types[self.current]
-        player_name = self.players[self.current]
+        if player is None:
+            player_name = self.players[self.current]
+        else:
+            if player not in self.players:
+                return Session.MOVE_NOT_PLAYER
+            elif player != self.players[self.current]:
+                return Session.MOVE_NOT_YOUR_TURN
+            else:
+                player_name = player
 
         if self.table.set(row, col, current_type):
             self.current += 1
@@ -210,9 +220,9 @@ class Session(object):
                 timestamp = int(time.mktime(datetime.datetime.now().timetuple()))
 
             self.history.append(Move(row, col, player_name, timestamp, False))
-            return True
+            return Session.MOVE_OK
 
-        return False
+        return Session.MOVE_INVALID
 
     def get_winner(self):
         """ check if last move win the game """
@@ -251,8 +261,13 @@ class Session(object):
 
         result = cls(session.player1, session.player2, session.player1_is_ai, session.player2_is_ai)
 
+        players = [session.player1, session.player2]
+        i = 0
+
         for move in session.moves:
-            result.move(move.row, move.col, move.timestamp)
+            result.move(move.row, move.col, players[i], move.timestamp)
+            i += 1
+            i %= 2
 
         return result
 
