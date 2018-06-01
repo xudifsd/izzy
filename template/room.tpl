@@ -1,16 +1,18 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html>
 <head>
-    <title>Room {{ room_id }}</title>
+    <title>Gomoku Room {{ room_id }}</title>
     <link rel="stylesheet" href="/static/izzy.css">
     <script type="text/javascript" src="http://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js">
     </script>
+    <script type="text/javascript" src="/static/room.js">
+    </script>
     <script type="text/javascript">
         $(document).ready(function() {
-            console.log("js ready");
-
             $("#page").css("display", "block");
             $("#loading").css("display", "none");
+
+            room_start();
         });
     </script>
 </head>
@@ -21,7 +23,11 @@
 </div>
 
 <div id="page">
-        <!-- real page -->
+    <div class="center" style="width:600px; height:600px; background-color:#f8f8f8">
+    </div>
+</div>
+
+<div id="log">
 </div>
 
 </body>

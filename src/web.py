@@ -47,7 +47,7 @@ class HTTPRequest(object):
 
 
 class HTTPResponse(object):
-    def __init__(self, status, headers, body, cookie):
+    def __init__(self, status, headers=None, body=None, cookie=None):
         self.status = status
         self.headers = headers
         self.body = body
@@ -80,7 +80,7 @@ def handle_home_page(req):
     body = render_template("home.tpl", rooms=rooms)
     log.debug("user %s logged in, get rooms %s", user_name, rooms)
 
-    return HTTPResponse(200, headers, body, req.cookie)
+    return HTTPResponse(200, headers, body)
 
 
 def handle_login(req):
@@ -91,39 +91,73 @@ def handle_login(req):
     new_id = req.context.uid_handler.gen_new_id(user_name)
     req.cookie["uid"] = str(new_id)
     room_id = req.context.room_manager.new_room(user_name)
-    return redirect("/room/%d" % (room_id), cookie=req.cookie, status=303)
+    return redirect("/room/%d/" % (room_id), cookie=req.cookie, status=303)
 
 
-def handle_room(req):
+def get_user_name_room(req):
     user_name = req.context.uid_handler.get_user_name(req.cookie)
     if user_name is None:
-        return redirect("/")
-
-    headers = {"Content-Type": "text/html; charset=utf-8"}
+        return None, None
 
     room_id = int(req.groups[0])
 
     room = req.context.room_manager.get_room(room_id)
 
-    if room is None:
+    return user_name, room
+
+
+def handle_room(req):
+    user_name, room = get_user_name_room(req)
+
+    if user_name is None or room is None:
         return redirect("/")
+
+    headers = {"Content-Type": "text/html; charset=utf-8"}
 
     add_rtn = room.add_player(user_name)
 
     if add_rtn == Room.ADD_OK or add_rtn == Room.ADD_ALREADY_IN:
-        return HTTPResponse(200, headers,
-                "<html><body>%s, welcom to room %d, room status %s</body></html>" % \
-                        (user_name, room_id, json.dumps(room.status())), req.cookie)
+        log.debug("user going into room %d", room.id)
+        body = render_template("room.tpl", room_id=room.id)
+        return HTTPResponse(200, headers, body)
     else:
         # add_rtn is ADD_FULL
         return HTTPResponse(200, headers,
                 "<html><body>%s, room is full, room status %s</body></html>" % \
-                        (user_name, json.dumps(room.status())), req.cookie)
+                        (user_name, json.dumps(room.status())))
+
+
+def handle_room_status(req):
+    user_name, room = get_user_name_room(req)
+
+    headers = {"Content-Type": "application/json"}
+
+    if room is None:
+        return HTTPResponse(404)
+
+    return HTTPResponse(200, headers, json.dumps(room.status()))
+
+
+def handle_room_move(req):
+    user_name, room = get_user_name_room(req)
+
+    if room is None:
+        return HTTPResponse(404)
+
+    if user_name is None:
+        return HTTPResponse(403)
+
+    if user_name is None or room is None:
+        return HTTPResponse(404)
+
+    headers = {"Content-Type": "text/javascript; charset=utf-8"}
+
+    return HTTPResponse(200, headers, json.dumps({"status": chess.Session.MOVE_OK}))
 
 
 def handle_404(req):
     header = {"Content-Type": "text/plain; charset=utf-8"}
-    return HTTPResponse(404, header, "nothing here, you'r using %d" % (req.method), req.cookie)
+    return HTTPResponse(404, header, "nothing here, you'r using %d" % (req.method))
 
 
 def handle_static(req):
@@ -138,7 +172,7 @@ def handle_static(req):
     else:
         header = {"Content-Type": MIME_MAPPING[parts[-1]]}
 
-    return HTTPResponse(200, header, open(path), req.cookie)
+    return HTTPResponse(200, header, open(path))
 
 
 def is_match_all(pattern, string):
@@ -171,25 +205,32 @@ class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         self.send_response(resp.status)
 
-        for k, v in resp.headers.items():
-            self.send_header(k, v)
+        if resp.headers is not None:
+            for k, v in resp.headers.items():
+                self.send_header(k, v)
 
         if resp.cookie is not None:
             for k, v in resp.cookie.items():
                 self.send_header("Set-Cookie", "%s=%s" % (str(k), str(v.coded_value)))
 
-        self.end_headers()
 
         if body is not None:
             if isinstance(body, str) or isinstance(body, unicode):
+                log.debug("get str response body, length is %d", len(body))
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+
                 self.wfile.write(body)
             elif self._is_file(body):
+                self.end_headers()
                 try:
                     shutil.copyfileobj(body, self.wfile)
                 finally:
                     body.close()
             else:
+                self.end_headers()
                 log.warn("unknown body %r", body)
+
 
     def process(self, method):
         context = self.server.context
@@ -351,6 +392,8 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
                 (HTTPServer.GET, re.compile("/"), handle_home_page),
                 (HTTPServer.POST, re.compile("/"), handle_login),
                 (HTTPServer.GET, re.compile("/room/([0-9]+)"), handle_room),
+                (HTTPServer.GET, re.compile("/room/([0-9]+)/status"), handle_room_status),
+                (HTTPServer.PUT, re.compile("/room/([0-9]+)/move"), handle_room_move),
                 (HTTPServer.GET, re.compile("/static/(.*)"), handle_static),
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
