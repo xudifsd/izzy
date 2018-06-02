@@ -74,7 +74,7 @@ def replay_session(src):
 
             print "%s(is_ai=%r) make move in %d,%d in %s" % (move.author, move.is_ai, move.row, move.col, date.isoformat())
             print table.to_ascii()
-            time.sleep(1)
+            time.sleep(0.3)
 
         print "-" * 100
 

@@ -8,10 +8,11 @@
     </script>
 </head>
 <body>
+    <div><a href="/new-room">new room</a></div>
 
     {% for room in rooms %}
         <div>
-            <a href="/room/{{ room['id']}}"><span>room {{ room['id']}}</span></a>
+            <a href="/room/{{ room['id'] }}/"><span>room {{ room['id']}}</span></a>
         </div>
     {% endfor %}
 

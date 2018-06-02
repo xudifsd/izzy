@@ -18,9 +18,12 @@ log = logging.getLogger("web")
 import jinja2
 
 import chess
+import persist
 
 STATIC_HOME = os.path.join(os.path.dirname(__file__), "../static")
 TEMPLATE_HOME = os.path.join(os.path.dirname(__file__), "../template")
+
+STORE_PATH = "data/sessions.data"
 
 
 MIME_MAPPING = {
@@ -90,6 +93,14 @@ def handle_login(req):
 
     new_id = req.context.uid_handler.gen_new_id(user_name)
     req.cookie["uid"] = str(new_id)
+    return redirect("/", cookie=req.cookie, status=303)
+
+
+def handle_new_room(req):
+    user_name = req.context.uid_handler.get_user_name(req.cookie)
+    if user_name is None:
+        return redirect("/static/login.html", status=303)
+
     room_id = req.context.room_manager.new_room(user_name)
     return redirect("/room/%d/" % (room_id), cookie=req.cookie, status=303)
 
@@ -138,6 +149,16 @@ def handle_room_status(req):
     return HTTPResponse(200, headers, json.dumps(room.status()))
 
 
+def handle_get_my_name(req):
+    user_name = req.context.uid_handler.get_user_name(req.cookie)
+    if user_name is None:
+        return HTTPResponse(404)
+    else:
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        return HTTPResponse(200, headers, json.dumps({"name": user_name}))
+
+
+
 def handle_room_move(req):
     user_name, room = get_user_name_room(req)
 
@@ -150,9 +171,32 @@ def handle_room_move(req):
     if user_name is None or room is None:
         return HTTPResponse(404)
 
-    headers = {"Content-Type": "text/javascript; charset=utf-8"}
+    row, col = req.args.get("row"), req.args.get("col")
+    if row is None or row is None or not row.isdigit() or not col.isdigit():
+        return HTTPResponse(400)
 
-    return HTTPResponse(200, headers, json.dumps({"status": chess.Session.MOVE_OK}))
+    row, col = int(row), int(col)
+
+    if room.session is None:
+        log.debug("session is not established")
+        return HTTPResponse(400)
+
+    rtn = room.session.move(row, col, user_name)
+
+    headers = {"Content-Type": "application/json; charset=utf-8"}
+
+    if rtn == chess.Session.MOVE_OK:
+        status = 200
+        if room.session.get_winner() is not None:
+            if persist.append_to_store(STORE_PATH, room.session.serialize()):
+                log.debug("saving success")
+            else:
+                log.warn("saving failed")
+    else:
+        status = 400
+
+    # TODO better error msg
+    return HTTPResponse(status, headers, json.dumps({"status": rtn}))
 
 
 def handle_404(req):
@@ -254,7 +298,8 @@ class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         for k, v in urlparse.parse_qsl(parse_result.query):
             args[k] = v
 
-        if self.headers.get("Content-Type") == "application/x-www-form-urlencoded":
+        content_type = self.headers.get("Content-Type")
+        if content_type is not None and content_type.startswith("application/x-www-form-urlencoded"):
             for k, v in urlparse.parse_qsl(data):
                 args[k] = v
 
@@ -339,8 +384,10 @@ class Room(object):
             if self.session is None:
                 result["status"] = "waiting"
             else:
+                result["table"] = self.session.table.to_array()
                 if self.session.get_winner() is not None:
                     result["status"] = "finished"
+                    result["winner"] = self.session.get_winner()
                 else:
                     result["status"] = "playing"
                     result["current"] = self.session.get_current_player_name()
@@ -391,9 +438,11 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
         route_info = (
                 (HTTPServer.GET, re.compile("/"), handle_home_page),
                 (HTTPServer.POST, re.compile("/"), handle_login),
+                (HTTPServer.GET, re.compile("/new-room"), handle_new_room),
+                (HTTPServer.GET, re.compile("/my-name"), handle_get_my_name),
                 (HTTPServer.GET, re.compile("/room/([0-9]+)"), handle_room),
                 (HTTPServer.GET, re.compile("/room/([0-9]+)/status"), handle_room_status),
-                (HTTPServer.PUT, re.compile("/room/([0-9]+)/move"), handle_room_move),
+                (HTTPServer.POST, re.compile("/room/([0-9]+)/move"), handle_room_move),
                 (HTTPServer.GET, re.compile("/static/(.*)"), handle_static),
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
@@ -402,7 +451,7 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
 
 
 def run(server_class=HTTPServer, handler_class=HTTPHandler, port=8080):
-    server_address = ("127.0.0.1", port)
+    server_address = ("", port)
     httpd = server_class(server_address, handler_class)
     print "Starting httpd at %d..." % (port)
     httpd.serve_forever()

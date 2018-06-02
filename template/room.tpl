@@ -12,7 +12,7 @@
             $("#page").css("display", "block");
             $("#loading").css("display", "none");
 
-            room_start();
+            window.room.start();
         });
     </script>
 </head>
@@ -23,11 +23,34 @@
 </div>
 
 <div id="page">
-    <div class="center" style="width:600px; height:600px; background-color:#f8f8f8">
-    </div>
-</div>
+    <div style="position: absolute; top: 20px;"><a href="/">Home</a></div>
 
-<div id="log">
+    <div class="center" style="width:600px; height:600px; background-color:#f8f8f8">
+        <table id="broad" style="border-spacing: 1px;">
+        </table>
+    </div>
+
+    <div id="me" class="people-info" style="position: absolute; bottom: 10px; left: 10px; border: 0;">
+    <table>
+        <tr>
+            <td id="me-name"></td>
+        </tr>
+        <tr>
+            <td id="me-status"></td>
+        </tr>
+    </table>
+    </div>
+
+    <div id="other" class="people-info" style="position: absolute; top: 10px; right: 10px; border: 0;">
+    <table>
+        <tr>
+            <td id="other-name"></td>
+        </tr>
+        <tr>
+            <td id="other-status"></td>
+        </tr>
+    </table>
+    </div>
 </div>
 
 </body>

@@ -124,6 +124,15 @@ class Table(object):
 
         return False
 
+    def to_array(self):
+        result = []
+        for row in xrange(self.row):
+            row_array = []
+            for col in xrange(self.col):
+                row_array.append(self.get(row, col))
+            result.append(row_array)
+        return result
+
     def to_ascii(self):
         buf = []
 
