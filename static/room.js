@@ -125,7 +125,7 @@ window.room = (function() {
         get_my_name();
         refresh();
 
-        refresh_handler = setInterval(refresh, 100);
+        refresh_handler = setInterval(refresh, 300);
     }
 
     return {"start": room_start, "make_move": make_move};

@@ -62,7 +62,7 @@ class PersistManager(object):
             try:
                 val = self.queue.get(False)
                 append_to_store(self.path, val)
-                log.debug("appended val to store %s", self.path)
+                log.info("appended val to store %s", self.path)
             except Empty:
                 time.sleep(0.5)
 

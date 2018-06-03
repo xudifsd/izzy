@@ -19,6 +19,7 @@ import jinja2
 
 import chess
 import persist
+import izzy
 
 STATIC_HOME = os.path.join(os.path.dirname(__file__), "../static")
 TEMPLATE_HOME = os.path.join(os.path.dirname(__file__), "../template")
@@ -91,6 +92,10 @@ def handle_login(req):
     if user_name is None:
         return redirect("/static/login.html", status=303)
 
+    if user_name == "izzy":
+        return HTTPResponse(400, {"Content-Type": "text/html; charset=utf-8"},
+                "<html><body>izzy is reseved name</body></html>")
+
     new_id = req.context.uid_handler.gen_new_id(user_name)
     req.cookie["uid"] = str(new_id)
     return redirect("/", cookie=req.cookie, status=303)
@@ -101,7 +106,12 @@ def handle_new_room(req):
     if user_name is None:
         return redirect("/static/login.html", status=303)
 
-    room_id = req.context.room_manager.new_room(user_name)
+    if req.args.get("with_ai") in ["True", "true"]:
+        izzy = req.context.izzy.copy()
+    else:
+        izzy = None
+
+    room_id = req.context.room_manager.new_room(user_name, izzy)
     return redirect("/room/%d/" % (room_id), cookie=req.cookie, status=303)
 
 
@@ -125,7 +135,7 @@ def handle_room(req):
 
     headers = {"Content-Type": "text/html; charset=utf-8"}
 
-    add_rtn = room.add_player(user_name)
+    add_rtn = room.add_player(user_name, False)
 
     if add_rtn == Room.ADD_OK or add_rtn == Room.ADD_ALREADY_IN:
         log.debug("user going into room %d", room.id)
@@ -188,10 +198,15 @@ def handle_room_move(req):
     if rtn == chess.Session.MOVE_OK:
         code = 200
         if room.session.get_winner() is not None:
-            req.context.persist_manager.persist(room.session.serialize())
             status = "finished"
         else:
             status = "ok"
+            if room.izzy is not None:
+                row, col = room.izzy.query(room.session)
+                ai_rtn = room.session.move(row, col, "izzy")
+                if ai_rtn != chess.Session.MOVE_OK:
+                    log.warn("ai move for table %d, row %d, col %d is not ok, rtn %d",
+                            room.session.table, row, col, ai_rtn)
     else:
         log.debug("move not ok, status %d", rtn)
         if rtn == chess.Session.MOVE_INVALID:
@@ -203,6 +218,10 @@ def handle_room_move(req):
         elif rtn == chess.Session.MOVE_NOT_YOUR_TURN:
             code = 403
             status = "not_your_turn"
+
+    if room.session.get_winner() is not None:
+        req.context.persist_manager.persist(room.session.serialize())
+        req.context.izzy.train([room.session])
 
     return HTTPResponse(code, headers, json.dumps({"status": status}))
 
@@ -268,7 +287,6 @@ class HTTPHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
         if body is not None:
             if isinstance(body, str) or isinstance(body, unicode):
-                log.debug("get str response body, length is %d", len(body))
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
 
@@ -372,9 +390,11 @@ class Room(object):
         self.id = id
         self.lock = threading.RLock()
         self.player_names = []
+        self.is_ais = []
         self.session = None
+        self.izzy = None
 
-    def add_player(self, name):
+    def add_player(self, name, is_ai):
         with self.lock:
             if name in self.player_names:
                 return Room.ADD_ALREADY_IN
@@ -382,9 +402,18 @@ class Room(object):
                 return Room.ADD_FULL
 
             self.player_names.append(name)
+            self.is_ais.append(is_ai)
             if len(self.player_names) == 2:
-                self.session = chess.Session(self.player_names[0], self.player_names[1], False, False)
+                self.session = chess.Session(self.player_names[0], self.player_names[1],
+                        self.is_ais[0], self.is_ais[1])
             return Room.ADD_OK
+
+    def add_ai(self, izzy):
+        with self.lock:
+            rtn = self.add_player("izzy", True)
+            if rtn == Room.ADD_OK:
+                self.izzy = izzy
+            return rtn
 
     def status(self):
         with self.lock:
@@ -409,12 +438,14 @@ class RoomManager(object):
         self.lock = threading.RLock()
         self.rooms = []
 
-    def new_room(self, user_name):
+    def new_room(self, user_name, izzy):
         with self.lock:
             id = len(self.rooms)
             room = Room(id)
             self.rooms.append(room)
-            room.add_player(user_name)
+            room.add_player(user_name, False)
+            if izzy is not None:
+                room.add_ai(izzy)
             return id
 
     def get_room(self, room_id):
@@ -432,11 +463,12 @@ class RoomManager(object):
 
 class HTTPContext(object):
     """ member of this instance should be thread safe """
-    def __init__(self, route_info, room_manager, uid_handler, persist_manager):
+    def __init__(self, route_info, room_manager, uid_handler, persist_manager, izzy):
         self.route_info = route_info
         self.room_manager = room_manager
         self.uid_handler = uid_handler
         self.persist_manager = persist_manager
+        self.izzy = izzy
 
 
 class HTTPServer(BaseHTTPServer.HTTPServer):
@@ -456,9 +488,14 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
 
+        self.izzy = izzy.Izzy.new()
+        sessions = map(lambda data: chess.Session.deserialize(data),
+                list(persist.iterate_over_store(STORE_PATH)))
+        self.izzy.train(sessions)
+
         self.persist_manager = persist.PersistManager(STORE_PATH)
         self.persist_manager.start()
-        self.context = HTTPContext(route_info, RoomManager(), UidHandler(), self.persist_manager)
+        self.context = HTTPContext(route_info, RoomManager(), UidHandler(), self.persist_manager, self.izzy)
 
     def serve(self):
         while True:

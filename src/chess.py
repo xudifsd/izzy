@@ -15,24 +15,31 @@ class Table(object):
 
     EMPTY, BLACK, WHITE = range(3)
 
-    def __init__(self, row, col):
+    def __init__(self, row, col, data=0):
         self.row = row
         self.col = col
-        self.data = 0
+        self.data = data
 
     def _bit_offset(self, row, col):
         return 2 * ((row * self.row) + col)
 
-    def set(self, row, col, type):
+    def copy(self):
+        return Table(self.row, self.col, self.data)
+
+    def set(self, row, col, chess_type):
         """ return True on success """
-        if type != Table.BLACK and type != Table.WHITE:
-            log.debug("invalid type %d", type)
+        if chess_type != Table.BLACK and chess_type != Table.WHITE:
+            log.debug("invalid chess_type %d", chess_type)
             return False
         if self.get(row, col) != Table.EMPTY:
             log.debug("position %d,%d has been occupied or invalid", row, col)
             return False
 
-        self.data |= type << self._bit_offset(row, col)
+        # NOTE, if row, col is of type numpy.int64 data too large will not take effect
+        row = int(row)
+        col = int(col)
+
+        self.data |= chess_type << self._bit_offset(row, col)
         return True
 
     def get(self, row, col):
@@ -184,12 +191,13 @@ class Table(object):
 class Move(object):
     """ move made by someone """
 
-    def __init__(self, row, col, author, timestamp, is_ai):
+    def __init__(self, row, col, author, timestamp, is_ai, before_moved_table):
         self.row = row
         self.col = col
         self.author = author
         self.timestamp = timestamp
         self.is_ai = is_ai
+        self.before_moved_table = before_moved_table
 
 
 class Session(object):
@@ -222,13 +230,15 @@ class Session(object):
             else:
                 player_name = player
 
+        before_move = self.table.copy()
+
         if not self.table.is_finished() and self.table.set(row, col, current_type):
             self.current += 1
             self.current %= 2
             if timestamp is None:
                 timestamp = int(time.mktime(datetime.datetime.now().timetuple()))
 
-            self.history.append(Move(row, col, player_name, timestamp, False))
+            self.history.append(Move(row, col, player_name, timestamp, False, before_move))
             return Session.MOVE_OK
 
         return Session.MOVE_INVALID

@@ -9,6 +9,7 @@
 </head>
 <body>
     <div><a href="/new-room">new room</a></div>
+    <div><a href="/new-room?with_ai=true">new ai room</a></div>
 
     {% for room in rooms %}
         <div>
