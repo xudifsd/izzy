@@ -27,8 +27,9 @@ window.room = (function() {
             data: {"row": row, "col": col},
             success: function (response) {
                 window.move_response = response
-                console.log(this.data.row);
-                console.log(this.data.col);
+                if (response["status"] === "finished") {
+                    alert("you win!");
+                } // TODO alert other player
                 console.log("success move " + response);
             },
             error: function (xhr, ajaxOptions, thrownError) {

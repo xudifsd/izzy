@@ -17,5 +17,8 @@ cli: protocol
 replay: protocol
 	./bin/with-env.sh ./src/cli.py --replay
 
+length: protocol
+	./bin/with-env.sh ./src/cli.py --length
+
 web: protocol
 	./bin/with-env.sh python2 ./src/web.py 8080

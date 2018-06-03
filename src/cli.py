@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Tue May 29 20:13:50 CST 2018
 
+import os
 import sys
 import argparse
 import datetime
@@ -79,10 +80,16 @@ def replay_session(src):
         print "-" * 100
 
 
+def length(src):
+    """ get length of data set """
+    print len(list(persist.iterate_over_store(SAVE_TARGET)))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--play", help="play Gomoku", action="store_true")
     parser.add_argument("-r", "--replay", help="replay old sessions", action="store_true")
+    parser.add_argument("-l", "--length", help="get length of data set", action="store_true")
 
     args = parser.parse_args()
 
@@ -90,6 +97,8 @@ if __name__ == '__main__':
         play(SAVE_TARGET)
     elif args.replay:
         replay_session(SAVE_TARGET)
+    elif args.length:
+        length(SAVE_TARGET)
     else:
         parser.print_help()
         sys.exit(1)

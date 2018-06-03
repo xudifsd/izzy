@@ -186,17 +186,25 @@ def handle_room_move(req):
     headers = {"Content-Type": "application/json; charset=utf-8"}
 
     if rtn == chess.Session.MOVE_OK:
-        status = 200
+        code = 200
         if room.session.get_winner() is not None:
-            if persist.append_to_store(STORE_PATH, room.session.serialize()):
-                log.debug("saving success")
-            else:
-                log.warn("saving failed")
+            req.context.persist_manager.persist(room.session.serialize())
+            status = "finished"
+        else:
+            status = "ok"
     else:
-        status = 400
+        log.debug("move not ok, status %d", rtn)
+        if rtn == chess.Session.MOVE_INVALID:
+            code = 400
+            status = "move_invalid"
+        elif rtn == chess.Session.MOVE_NOT_PLAYER:
+            code = 401
+            status = "not_player"
+        elif rtn == chess.Session.MOVE_NOT_YOUR_TURN:
+            code = 403
+            status = "not_your_turn"
 
-    # TODO better error msg
-    return HTTPResponse(status, headers, json.dumps({"status": rtn}))
+    return HTTPResponse(code, headers, json.dumps({"status": status}))
 
 
 def handle_404(req):
@@ -424,10 +432,11 @@ class RoomManager(object):
 
 class HTTPContext(object):
     """ member of this instance should be thread safe """
-    def __init__(self, route_info, room_manager, uid_handler):
+    def __init__(self, route_info, room_manager, uid_handler, persist_manager):
         self.route_info = route_info
         self.room_manager = room_manager
         self.uid_handler = uid_handler
+        self.persist_manager = persist_manager
 
 
 class HTTPServer(BaseHTTPServer.HTTPServer):
@@ -447,20 +456,32 @@ class HTTPServer(BaseHTTPServer.HTTPServer):
                 (HTTPServer.ANY, re.compile(".*"), handle_404)
                 )
 
-        self.context = HTTPContext(route_info, RoomManager(), UidHandler())
+        self.persist_manager = persist.PersistManager(STORE_PATH)
+        self.persist_manager.start()
+        self.context = HTTPContext(route_info, RoomManager(), UidHandler(), self.persist_manager)
+
+    def serve(self):
+        while True:
+            try:
+                self.handle_request()
+            except KeyboardInterrupt:
+                self.persist_manager.join()
+                break
+
 
 
 def run(server_class=HTTPServer, handler_class=HTTPHandler, port=8080):
     server_address = ("", port)
     httpd = server_class(server_address, handler_class)
     print "Starting httpd at %d..." % (port)
-    httpd.serve_forever()
+    httpd.serve()
+    return 0
 
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
             level=logging.DEBUG)
     if len(sys.argv) == 2:
-        run(port=int(sys.argv[1]))
+        sys.exit(run(port=int(sys.argv[1])))
     else:
-        run()
+        sys.exit(run())

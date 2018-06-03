@@ -222,7 +222,7 @@ class Session(object):
             else:
                 player_name = player
 
-        if self.table.set(row, col, current_type):
+        if not self.table.is_finished() and self.table.set(row, col, current_type):
             self.current += 1
             self.current %= 2
             if timestamp is None:

@@ -3,6 +3,14 @@
 
 import struct
 import zlib
+import threading
+import logging
+import time
+from Queue import Queue
+from Queue import Empty
+
+log = logging.getLogger("persist")
+
 
 # format: [len of compressed data][compressed data][len of compressed data][compressed data]...
 
@@ -32,6 +40,41 @@ def iterate_over_store(path):
             decompressed = zlib.decompress(data)
 
             yield decompressed
+
+
+class PersistManager(object):
+    def __init__(self, path):
+        self.path = path
+        self.running = True
+        self.queue = Queue()
+        self.thread = None
+
+    def start(self):
+        self.thread = threading.Thread(target=self.run, args=(),
+                name="persist-manager")
+        self.thread.start()
+
+    def persist(self, val):
+        self.queue.put(val)
+
+    def run(self):
+        while self.running:
+            try:
+                val = self.queue.get(False)
+                append_to_store(self.path, val)
+                log.debug("appended val to store %s", self.path)
+            except Empty:
+                time.sleep(0.5)
+
+    def join(self):
+        while not self.queue.empty():
+            time.sleep(0.2)
+
+        self.running = False
+        if self.thread is not None:
+            self.thread.join()
+            self.thread = None
+
 
 
 if __name__ == '__main__':
