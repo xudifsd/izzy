@@ -26,7 +26,7 @@
     <div style="position: absolute; top: 20px;"><a href="/">Home</a></div>
 
     <div class="center" style="width:600px; height:600px; background-color:#f8f8f8">
-        <table id="broad" style="border-spacing: 1px;">
+        <table id="broad">
         </table>
     </div>
 

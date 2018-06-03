@@ -73,13 +73,10 @@ window.room = (function() {
                 $("#me-status").text("waiting play");
             }
         } else if (response["status"] === "finished") {
-            $("#me-status").text("game finished");
             var winner = response["winner"];
-            if (winner === my_name) {
-                alert("you win!");
-            } else {
-                alert("you lose");
-            }
+            var is_winner = winner === my_name;
+            $("#me-status").text(is_winner ? "winner" : "loser");
+            $("#other-status").text(is_winner ? "loser" : "winner");
             clearInterval(refresh_handler);
         } else {
             $("#me-status").text("unknown");
@@ -87,11 +84,11 @@ window.room = (function() {
     }
 
     function generate_slot(value, row, col) {
-        var color = "black";
+        var color = "#FFAFA";
         if (value === 1) {
-            color = "purple";
+            color = "#696969";
         } else if (value === 2) {
-            color = "orange";
+            color = "#FFA54F";
         }
         return "<td class='slot' style='background-color: "
             + color + "' data-row='" + row + "' data-col='" + col + "'></td>";
