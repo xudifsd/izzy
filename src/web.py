@@ -12,6 +12,7 @@ import shutil
 import threading
 import logging
 import json
+from SocketServer import ThreadingMixIn
 
 log = logging.getLogger("web")
 
@@ -471,11 +472,12 @@ class HTTPContext(object):
         self.izzy = izzy
 
 
-class HTTPServer(BaseHTTPServer.HTTPServer):
+class HTTPServer(BaseHTTPServer.HTTPServer, ThreadingMixIn):
     GET, PUT, POST, HEAD, PATCH, DELETE, OPTIONS, ANY = xrange(8)
 
     def __init__(self, *args, **kw):
         BaseHTTPServer.HTTPServer.__init__(self, *args, **kw)
+
         route_info = (
                 (HTTPServer.GET, re.compile("/"), handle_home_page),
                 (HTTPServer.POST, re.compile("/"), handle_login),
