@@ -21,5 +21,4 @@ length: protocol
 	./bin/with-env.sh ./src/cli.py --length
 
 web: protocol
-	export FLASK_APP=src/web.py
 	./bin/with-env.sh flask run

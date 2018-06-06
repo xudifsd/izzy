@@ -10,4 +10,6 @@ PYTHONPATH=${PYTHONPATH}:src:py_gen:lib
 
 export PYTHONPATH
 
+export FLASK_APP=src/web.py
+
 exec $@
