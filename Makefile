@@ -21,4 +21,4 @@ length: protocol
 	./bin/with-env.sh ./src/cli.py --length
 
 web: protocol
-	./bin/with-env.sh flask run
+	./bin/with-env.sh flask run --host=0.0.0.0

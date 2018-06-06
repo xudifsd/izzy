@@ -2,29 +2,16 @@
 # Thu May 31 09:15:45 CST 2018
 
 import os
-import sys
 
 import threading
-import logging
 import json
 
-log = logging.getLogger("web")
-
-import jinja2
 from flask import Flask
 import flask
 
 import chess
 import persist
 import izzy
-
-STATIC_HOME = os.path.join(os.path.dirname(__file__), "../static")
-TEMPLATE_HOME = os.path.join(os.path.dirname(__file__), "../template")
-
-STORE_PATH = "data/sessions.data"
-
-
-app = Flask(__name__)
 
 
 class UidHandler(object):
@@ -77,6 +64,10 @@ class RoomManager(object):
                     map(lambda x: x.status(), self.rooms))
 
 
+STORE_PATH = "data/sessions.data"
+
+app = Flask(__name__)
+
 uid_handler = UidHandler()
 room_manager = RoomManager()
 
@@ -87,39 +78,6 @@ izzy_ins.train(sessions)
 
 persist_manager = persist.PersistManager(STORE_PATH)
 persist_manager.start()
-
-class HTTPRequest(object):
-    def __init__(self, headers, context, path, groups, cookie, args, data, method):
-        self.headers = headers
-        self.context = context
-        self.path = path
-        self.groups = groups
-        self.cookie = cookie
-        self.args = args
-        self.data = data
-        self.method = method
-
-
-class HTTPResponse(object):
-    def __init__(self, status, headers=None, body=None, cookie=None):
-        self.status = status
-        self.headers = headers
-        self.body = body
-        self.cookie = cookie
-
-
-def redirect(url, cookie=None, status=307):
-    headers = {"Content-Type": "text/html; charset=utf-8",
-                "Location": url}
-    return HTTPResponse(status, headers, None, cookie)
-
-
-def render_template(template_file_name, *args, **kwargs):
-    tpl_path = os.path.join(TEMPLATE_HOME, template_file_name)
-    with open(tpl_path, "r") as f:
-        content = f.read()
-
-    return jinja2.Environment().from_string(content).render(*args, **kwargs)
 
 
 @app.route("/", methods=["GET"])
@@ -323,9 +281,5 @@ class Room(object):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
-            level=logging.DEBUG)
-    if len(sys.argv) == 2:
-        sys.exit(run(port=int(sys.argv[1])))
-    else:
-        sys.exit(run())
+    app.run(host="0.0.0.0",
+            port=5000)
