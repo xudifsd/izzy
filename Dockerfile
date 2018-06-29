@@ -9,6 +9,7 @@ RUN apt -y update && \
       make
 
 RUN pip install flask \
+        protobuf \
         numpy \
         scipy
 
